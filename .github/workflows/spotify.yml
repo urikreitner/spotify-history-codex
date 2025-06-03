@@ -1,0 +1,37 @@
+name: Collect Spotify history
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: spotify-scrape
+      cancel-in-progress: true
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - run: pip install -r requirements.txt
+
+    - run: python src/collector.py
+      env:
+        SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+        SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
+
+    - name: Commit DB
+      uses: EndBug/add-and-commit@v9
+      with:
+        add: "data/history_*.db"
+        message: "chore: update Spotify history $(date -u +'%F %T')"
+        default_author: github_actions
+        author_name: ${{ secrets.GH_NAME }}
+        author_email: ${{ secrets.GH_EMAIL }}
