@@ -19,7 +19,7 @@ spotify-history/
 ├── src/
 │   └── collector.py          # polling script
 ├── data/
-│   └── history.db            # SQLite DB (auto‑committed)
+│   └── history_YYYYMM.db            # SQLite DB (auto‑committed)
 ├── requirements.txt          # spotipy, python‑dotenv
 └── README.md                 # setup notes
 ```
@@ -54,6 +54,13 @@ print(TOKEN)
 
 </details>
 
+You can also generate a token via `scripts/get_refresh_token.py`:
+
+```bash
+SPOTIFY_USER=<username> SPOTIFY_CLIENT_ID=<id> \
+SPOTIFY_CLIENT_SECRET=<secret> scripts/get_refresh_token.py
+```
+
 > **Scope safety** – only `user-read-recently-played` is required; no write perms.
 
 ### Store secrets in the repo ➜ **Settings → Secrets & variables → Actions**
@@ -67,10 +74,12 @@ Secrets are AES‑encrypted at rest and only exposed to the running job ([docs.
 
 ```python
 #!/usr/bin/env python3
-import os, sqlite3, spotipy
+import os, sqlite3, datetime, spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "history.db")
+now = datetime.datetime.utcnow()
+db_name = f"history_{now.strftime('%Y%m')}.db"
+DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", db_name)
 conn = sqlite3.connect(DB_PATH)
 conn.execute("""CREATE TABLE IF NOT EXISTS plays (
     played_at TEXT PRIMARY KEY,  -- ISO‑8601 UTC
@@ -144,7 +153,7 @@ jobs:
     - name: Commit DB
       uses: EndBug/add-and-commit@v9
       with:
-        add: "data/history.db"
+        add: "data/history_*.db"
         message: "chore: update Spotify history $(date -u +'%F %T')"
         default_author: github_actions
         author_name:  ${{ secrets.GH_NAME }}
@@ -156,7 +165,7 @@ jobs:
 1. **`concurrency`** block prevents simultaneous runs on slow runners.
 2. **`setup-python`** caches the selected version.
 3. **`EndBug/add-and-commit`** action commits changes without needing a PAT.
-4. DB commit executes only if `history.db` diff exists (handled internally by the action).
+4. DB commit executes only if `history_*.db` diff exists (handled internally by the action).
 
 ---
 
@@ -213,7 +222,7 @@ act -j scrape
 | Feature                 | Idea                                                             |
 | ----------------------- | ---------------------------------------------------------------- |
 | **Back‑fill**           | Parse monthly GDPR *Streaming History* JSON to seed DB.          |
-| **Visual dashboards**   | Build Streamlit or Grafana panel reading `history.db`.           |
+| **Visual dashboards**   | Build Streamlit or Grafana panel reading `history_YYYYMM.db`.           |
 | **Webhook alerts**      | Push Discord message when a track crosses 50th listen.           |
 | **Alternative storage** | Switch to DuckDB or Postgres by swapping `sqlite3` driver calls. |
 | **Unit tests**          | Mock `spotipy` responses – run via `pytest` in the workflow.     |
