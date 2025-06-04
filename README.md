@@ -133,6 +133,9 @@ on:
     - cron: "*/10 * * * *"
   workflow_dispatch:  # manual trigger for testing
 
+permissions:
+  contents: write
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
