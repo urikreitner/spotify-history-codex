@@ -15,7 +15,9 @@ db_name = f"history_{now.strftime('%Y%m')}.db"
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_PATH = os.path.join(DATA_DIR, db_name)
+
 logger.info("Storing plays in %s", DB_PATH)
+
 
 conn = sqlite3.connect(DB_PATH)
 logger.info("Connected to database")
@@ -36,6 +38,7 @@ oauth = SpotifyOAuth(
 )
 token = oauth.refresh_access_token(os.getenv("SPOTIFY_REFRESH_TOKEN"))
 logger.info("Refreshed access token")
+
 sp = spotipy.Spotify(auth=token["access_token"])
 
 items = sp.current_user_recently_played(limit=50)["items"]
