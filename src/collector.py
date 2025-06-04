@@ -10,7 +10,8 @@ from spotipy.oauth2 import SpotifyOAuth
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-now = datetime.datetime.utcnow()
+# Use timezone-aware UTC timestamp
+now = datetime.datetime.now(datetime.UTC)
 db_name = f"history_{now.strftime('%Y%m')}.db"
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -50,7 +51,7 @@ for item in items:
         item["track"]["id"],
         item["track"]["name"],
         ", ".join(a["name"] for a in item["track"]["artists"]),
-        item["ms_played"]
+        item.get("ms_played", item["track"].get("duration_ms"))
     )
     cur = conn.execute("INSERT OR IGNORE INTO plays VALUES (?,?,?,?,?)", row)
     inserted += cur.rowcount

@@ -77,7 +77,7 @@ Secrets are AES‑encrypted at rest and only exposed to the running job ([docs.
 import os, sqlite3, datetime, spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
-now = datetime.datetime.utcnow()
+now = datetime.datetime.now(datetime.UTC)
 db_name = f"history_{now.strftime('%Y%m')}.db"
 data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
 os.makedirs(data_dir, exist_ok=True)
@@ -107,7 +107,7 @@ for item in sp.current_user_recently_played(limit=50)["items"]:  # 50‑track AP
         item["track"]["id"],
         item["track"]["name"],
         ", ".join(a["name"] for a in item["track"]["artists"]),
-        item["ms_played"]
+        item.get("ms_played", item["track"].get("duration_ms"))
     )
     conn.execute("INSERT OR IGNORE INTO plays VALUES (?,?,?,?,?)", row)
 
