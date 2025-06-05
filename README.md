@@ -88,6 +88,7 @@ conn.execute("""CREATE TABLE IF NOT EXISTS plays (
     track_id  TEXT,
     track     TEXT,
     artist    TEXT,
+    genre     TEXT,
     ms_played INTEGER
 )""")
 
@@ -243,3 +244,4 @@ python scripts/backfill_from_json.py "Streaming_History*.json"
 Each record's timestamp (`endTime` in older exports or `ts` in newer ones) is
 interpreted as UTC and stored as `played_at` in `data/history_YYYYMM.db`.
 Existing rows are skipped with `INSERT OR IGNORE`.
+If provided, the track's genre is saved in the `genre` column.

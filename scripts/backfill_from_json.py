@@ -19,6 +19,7 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS plays (
     track_id  TEXT,
     track     TEXT,
     artist    TEXT,
+    genre     TEXT,
     ms_played INTEGER
 )"""
 
@@ -88,12 +89,18 @@ def process_file(fname: str, conns: Dict[str, sqlite3.Connection]) -> int:
             "episode_show_name",
         ])
 
+        genre = _first(entry, ["genre", "genres"])
+        if isinstance(genre, list):
+            genre = ", ".join(genre)
+
         ms_played = _first(entry, ["msPlayed", "ms_played"])
 
-        row = (played_at, track_id, track, artist, ms_played)
+        row = (played_at, track_id, track, artist, genre, ms_played)
 
         conn = get_conn(dt, conns)
-        cur = conn.execute("INSERT OR IGNORE INTO plays VALUES (?,?,?,?,?)", row)
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO plays VALUES (?,?,?,?,?,?)", row
+        )
         inserted += cur.rowcount
     return inserted
 
