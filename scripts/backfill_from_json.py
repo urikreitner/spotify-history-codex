@@ -21,6 +21,7 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS plays (
     artist    TEXT,
     genre     TEXT,
     ms_played INTEGER
+
 )"""
 
 
@@ -30,6 +31,11 @@ def get_conn(dt: datetime.datetime, conns: Dict[str, sqlite3.Connection]) -> sql
         path = os.path.join(DATA_DIR, f"history_{month}.db")
         conn = sqlite3.connect(path)
         conn.execute(SCHEMA)
+
+        # add genre column if missing in legacy DB
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(plays)").fetchall()]
+        if "genre" not in cols:
+            conn.execute("ALTER TABLE plays ADD COLUMN genre TEXT")
         conns[month] = conn
         logger.info("Opened %s", path)
     return conns[month]
@@ -100,6 +106,7 @@ def process_file(fname: str, conns: Dict[str, sqlite3.Connection]) -> int:
         conn = get_conn(dt, conns)
         cur = conn.execute(
             "INSERT OR IGNORE INTO plays VALUES (?,?,?,?,?,?)", row
+
         )
         inserted += cur.rowcount
     return inserted

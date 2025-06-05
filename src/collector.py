@@ -27,8 +27,15 @@ conn.execute("""CREATE TABLE IF NOT EXISTS plays (
     track_id  TEXT,
     track     TEXT,
     artist    TEXT,
-    ms_played INTEGER
+    ms_played INTEGER,
+    genre     TEXT
 )""")
+
+# add genre column to older DBs
+cols = [c[1] for c in conn.execute("PRAGMA table_info(plays)").fetchall()]
+if "genre" not in cols:
+    conn.execute("ALTER TABLE plays ADD COLUMN genre TEXT")
+    logger.info("Added missing 'genre' column")
 
 oauth = SpotifyOAuth(
     client_id=os.getenv("SPOTIFY_CLIENT_ID"),
@@ -44,16 +51,39 @@ sp = spotipy.Spotify(auth=token["access_token"])
 
 items = sp.current_user_recently_played(limit=50)["items"]
 logger.info("Fetched %d recent plays", len(items))
+
+# fetch genres for all artists in bulk
+artist_ids = {
+    a["id"]
+    for it in items
+    for a in it["track"]["artists"]
+    if a.get("id")
+}
+artist_genres = {}
+ids = list(artist_ids)
+for i in range(0, len(ids), 50):
+    batch = ids[i:i+50]
+    for artist in sp.artists(batch)["artists"]:
+        artist_genres[artist["id"]] = artist.get("genres", [])
+
 inserted = 0
 for item in items:
+    genres = set()
+    for a in item["track"]["artists"]:
+        genres.update(artist_genres.get(a.get("id"), []))
+    genre = ", ".join(sorted(genres))
     row = (
         item["played_at"],
         item["track"]["id"],
         item["track"]["name"],
         ", ".join(a["name"] for a in item["track"]["artists"]),
-        item.get("ms_played", item["track"].get("duration_ms"))
+        item.get("ms_played", item["track"].get("duration_ms")),
+        genre,
     )
-    cur = conn.execute("INSERT OR IGNORE INTO plays VALUES (?,?,?,?,?)", row)
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO plays VALUES (?,?,?,?,?,?)",
+        row,
+    )
     inserted += cur.rowcount
 
 conn.commit()
