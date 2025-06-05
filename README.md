@@ -231,3 +231,15 @@ act -j scrape
 | **Alternative storage** | Switch to DuckDB or Postgres by swapping `sqlite3` driver calls. |
 | **Unit tests**          | Mock `spotipy` responses – run via `pytest` in the workflow.     |
 
+
+## 8  Back‑fill
+
+Use the back-fill tool to import historical plays from Spotify's GDPR export.
+
+```bash
+python scripts/backfill_from_json.py "Streaming_History*.json"
+```
+
+Each record's timestamp (`endTime` in older exports or `ts` in newer ones) is
+interpreted as UTC and stored as `played_at` in `data/history_YYYYMM.db`.
+Existing rows are skipped with `INSERT OR IGNORE`.
