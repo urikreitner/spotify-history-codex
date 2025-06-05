@@ -88,7 +88,8 @@ conn.execute("""CREATE TABLE IF NOT EXISTS plays (
     track_id  TEXT,
     track     TEXT,
     artist    TEXT,
-    ms_played INTEGER
+    ms_played INTEGER,
+    genre     TEXT
 )""")
 
 oauth = SpotifyOAuth(
@@ -101,15 +102,33 @@ oauth = SpotifyOAuth(
 token = oauth.refresh_access_token(os.getenv("SPOTIFY_REFRESH_TOKEN"))
 sp = spotipy.Spotify(auth=token["access_token"])
 
-for item in sp.current_user_recently_played(limit=50)["items"]:  # 50‑track API cap
+items = sp.current_user_recently_played(limit=50)["items"]
+artist_ids = {
+    a["id"]
+    for it in items
+    for a in it["track"]["artists"]
+    if a.get("id")
+}
+artist_genres = {}
+ids = list(artist_ids)
+for i in range(0, len(ids), 50):
+    batch = ids[i:i+50]
+    for artist in sp.artists(batch)["artists"]:
+        artist_genres[artist["id"]] = artist.get("genres", [])
+
+for item in items:  # 50‑track API cap
+    genres = set()
+    for artist in item["track"]["artists"]:
+        genres.update(artist_genres.get(artist.get("id"), []))
     row = (
         item["played_at"],
         item["track"]["id"],
         item["track"]["name"],
         ", ".join(a["name"] for a in item["track"]["artists"]),
-        item.get("ms_played", item["track"].get("duration_ms"))
+        item.get("ms_played", item["track"].get("duration_ms")),
+        ", ".join(sorted(genres))
     )
-    conn.execute("INSERT OR IGNORE INTO plays VALUES (?,?,?,?,?)", row)
+    conn.execute("INSERT OR IGNORE INTO plays VALUES (?,?,?,?,?,?)", row)
 
 conn.commit()
 ```
