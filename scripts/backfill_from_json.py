@@ -6,7 +6,7 @@ import json
 import os
 import sqlite3
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -19,8 +19,9 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS plays (
     track_id  TEXT,
     track     TEXT,
     artist    TEXT,
-    ms_played INTEGER,
-    genre     TEXT
+    genre     TEXT,
+    ms_played INTEGER
+
 )"""
 
 
@@ -30,6 +31,7 @@ def get_conn(dt: datetime.datetime, conns: Dict[str, sqlite3.Connection]) -> sql
         path = os.path.join(DATA_DIR, f"history_{month}.db")
         conn = sqlite3.connect(path)
         conn.execute(SCHEMA)
+
         # add genre column if missing in legacy DB
         cols = [c[1] for c in conn.execute("PRAGMA table_info(plays)").fetchall()]
         if "genre" not in cols:
@@ -39,31 +41,72 @@ def get_conn(dt: datetime.datetime, conns: Dict[str, sqlite3.Connection]) -> sql
     return conns[month]
 
 
+def _first(entry: dict, keys) -> Optional[str]:
+    """Return the first non-null value for keys in entry."""
+    for key in keys:
+        if key in entry and entry[key] not in (None, ""):
+            return entry[key]
+    return None
+
+
+def _parse_timestamp(entry: dict) -> Optional[datetime.datetime]:
+    ts = _first(entry, ["endTime", "ts"])
+    if ts is None:
+        logger.warning("Skipping entry missing timestamp: %s", entry)
+        return None
+    if "endTime" in entry:
+        dt = datetime.datetime.strptime(ts, "%Y-%m-%d %H:%M")
+    else:
+        dt = datetime.datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")
+    return dt.replace(tzinfo=datetime.timezone.utc)
+
+
 def process_file(fname: str, conns: Dict[str, sqlite3.Connection]) -> int:
     with open(fname, "r", encoding="utf-8") as f:
         items = json.load(f)
     logger.info("Loaded %s (%d items)", fname, len(items))
     inserted = 0
     for entry in items:
-        # parse endTime as UTC
-        dt = datetime.datetime.strptime(entry["endTime"], "%Y-%m-%d %H:%M")
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        dt = _parse_timestamp(entry)
+        if dt is None:
+            continue
         played_at = dt.isoformat()
 
-        track_id = entry.get("spotifyTrackUri") or entry.get("spotifyEpisodeUri")
+        track_id = _first(entry, [
+            "spotifyTrackUri",
+            "spotifyEpisodeUri",
+            "spotify_track_uri",
+            "spotify_episode_uri",
+        ])
         if track_id and ":" in track_id:
             track_id = track_id.rsplit(":", 1)[-1]
-        track = entry.get("trackName") or entry.get("episodeName")
-        artist = entry.get("artistName") or entry.get("episodeShowName")
-        ms_played = entry.get("msPlayed") or entry.get("ms_played")
 
-        genre = ""
-        row = (played_at, track_id, track, artist, ms_played, genre)
+        track = _first(entry, [
+            "trackName",
+            "episodeName",
+            "master_metadata_track_name",
+            "episode_name",
+        ])
+
+        artist = _first(entry, [
+            "artistName",
+            "episodeShowName",
+            "master_metadata_album_artist_name",
+            "episode_show_name",
+        ])
+
+        genre = _first(entry, ["genre", "genres"])
+        if isinstance(genre, list):
+            genre = ", ".join(genre)
+
+        ms_played = _first(entry, ["msPlayed", "ms_played"])
+
+        row = (played_at, track_id, track, artist, genre, ms_played)
 
         conn = get_conn(dt, conns)
         cur = conn.execute(
-            "INSERT OR IGNORE INTO plays VALUES (?,?,?,?,?,?)",
-            row,
+            "INSERT OR IGNORE INTO plays VALUES (?,?,?,?,?,?)", row
+
         )
         inserted += cur.rowcount
     return inserted
